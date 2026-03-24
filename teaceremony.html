@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>埔小茶席實作解碼</title>
+    <style>
+        :root {
+            --primary-color: #5d4037; /* 深咖啡/茶色 */
+            --secondary-color: #8d6e63;
+            --accent-color: #81c784; /* 綠茶色 */
+            --bg-color: #efebe9;
+            --slot-bg: #d7ccc8;
+            --error-color: #e57373;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', 'PingFang TC', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--primary-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .header-container {
+            width: 100%;
+            max-width: 900px;
+            position: relative;
+            text-align: center;
+        }
+
+        h1 {
+            margin-bottom: 5px;
+        }
+
+        /* 計時器樣式 */
+        .timer-display {
+            position: absolute;
+            top: 10px;
+            right: 0;
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #d32f2f;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 5px 15px;
+            border-radius: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .subtitle {
+            text-align: center;
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 20px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: transform 0.2s, background-color 0.2s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        button:hover {
+            background-color: var(--secondary-color);
+            transform: translateY(-2px);
+        }
+
+        button.help-btn {
+            background-color: #5c6bc0;
+        }
+
+        button.check-btn {
+            background-color: var(--accent-color);
+            color: #1b5e20;
+            font-weight: bold;
+            font-size: 1.1em;
+            padding: 12px 30px;
+        }
+
+        /* 遊戲區域 */
+        .game-board {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            width: 100%;
+            max-width: 900px;
+        }
+
+        /* 放置區 (上面) */
+        .slots-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 15px;
+            padding: 20px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+
+        .slot {
+            aspect-ratio: 4/3;
+            background-color: var(--slot-bg);
+            border: 2px dashed var(--secondary-color);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            transition: all 0.3s;
+        }
+
+        .slot::before {
+            content: var(--slot-num);
+            position: absolute;
+            font-size: 3em;
+            color: rgba(255,255,255,0.5);
+            font-weight: bold;
+            z-index: 0;
+        }
+
+        .slot.drag-over {
+            background-color: #bcaaa4;
+            border-style: solid;
+        }
+
+        /* 圖片庫 (下面) */
+        .pool-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+            padding: 20px;
+            background: white;
+            border-radius: 15px;
+            min-height: 150px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+
+        /* 圖片項目 */
+        .item {
+            width: 130px;
+            aspect-ratio: 4/3;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: grab;
+            position: relative;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transition: transform 0.2s, box-shadow 0.2s, border 0.2s;
+            z-index: 1;
+            background-color: #000;
+        }
+
+        .item img, .item canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+
+        .item img { opacity: 0; }
+        .item canvas { opacity: 1; }
+        .item:hover img, .item.active-play img { opacity: 1; }
+        .item:hover canvas, .item.active-play canvas { opacity: 0; }
+        .item:active { cursor: grabbing; }
+
+        .item.selected {
+            transform: scale(1.05);
+            box-shadow: 0 0 0 4px #ffb74d, 0 5px 15px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+
+        .item.correct {
+            border: 4px solid var(--accent-color);
+            pointer-events: none; 
+        }
+
+        .item.wrong {
+            border: 4px solid var(--error-color);
+            animation: shake 0.5s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-5px); }
+        }
+
+        /* 彈出視窗共用樣式 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: var(--bg-color);
+            padding: 30px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 800px;
+            text-align: center;
+        }
+
+        .iframe-container {
+            position: relative;
+            padding-bottom: 56.25%;
+            height: 0;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        .iframe-container iframe {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+        }
+
+        @media (max-width: 600px) {
+            .slots-container {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            .item { width: 100%; }
+            .timer-display {
+                position: static;
+                display: inline-block;
+                margin-bottom: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header-container">
+        <h1>埔小茶席實作解碼 🍵</h1>
+        <div class="timer-display" id="timer-display">⏱️ 計時：00:00</div>
+    </div>
+    <div class="subtitle" id="stage-title">第一階段：擺席到溫壺 (電腦可直接拖曳，手機平板請先點圖片、再點空格)</div>
+
+    <div class="controls">
+        <button id="bgm-btn">🎵 音樂載入中...</button>
+        <button class="help-btn" onclick="toggleModal('video-modal', 'flex')">💡 忘記了？看示範影片</button>
+    </div>
+
+    <!-- 內建背景音樂 (設定 autoplay，但受瀏覽器政策影響，將透過JS輔助自動播放) -->
+    <audio id="bgm" loop autoplay>
+        <source src="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3" type="audio/mpeg">
+    </audio>
+
+    <div class="game-board">
+        <!-- 放置區 -->
+        <div class="slots-container" id="slots"></div>
+        
+        <div style="text-align: center;">
+            <button class="check-btn" onclick="checkAnswers()">✅ 檢查答案</button>
+        </div>
+
+        <!-- 圖片庫 -->
+        <div class="pool-container" id="pool"></div>
+    </div>
+
+    <!-- YouTube 影片彈出視窗 -->
+    <div class="modal" id="video-modal">
+        <div class="modal-content">
+            <h2>示範影片複習</h2>
+            <div class="iframe-container">
+                <iframe src="https://www.youtube.com/embed/66Ry2umJQjo" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+            </div>
+            <button onclick="toggleModal('video-modal', 'none')">關閉影片，繼續挑戰</button>
+        </div>
+    </div>
+
+    <!-- 錯誤提示彈窗 -->
+    <div class="modal" id="error-modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h2 style="color: var(--error-color); font-size: 2em; margin-bottom: 10px;">哎呀！有些步驟不對喔！</h2>
+            <p id="error-msg" style="font-size: 1.2em; margin-bottom: 25px;">第 X, Y 格的圖片放錯了。</p>
+            <p style="color: #666; margin-bottom: 20px;">錯誤的圖片會退回下方，請重新回想影片內容，或點擊上方「看示範影片」複習！</p>
+            <button class="check-btn" onclick="toggleModal('error-modal', 'none')" style="background-color: var(--error-color); color: white;">我知道了，重新嘗試</button>
+        </div>
+    </div>
+
+    <!-- 成功過關彈窗 -->
+    <div class="modal" id="success-modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <h2 id="success-title" style="color: var(--accent-color); font-size: 2em; margin-bottom: 10px;">🎉 恭喜你！完全答對了！</h2>
+            <p id="success-msg" style="font-size: 1.2em; margin-bottom: 10px;">你已經熟悉了目前的流程。</p>
+            <p id="success-time-msg" style="font-size: 1.2em; color: #d32f2f; font-weight: bold; margin-bottom: 25px; display: none;">總計花費時間：00 分 00 秒</p>
+            <button id="next-stage-btn" class="check-btn" onclick="nextStage()">進入下一階段</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 關卡設定區 ---
+        const stages = [
+            {
+                title: "第一階段：擺席到溫壺",
+                files: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
+            },
+            {
+                title: "第二階段：製茶",
+                files: ['2-1', '2-2', '2-3', '2-4', '2-5', '2-6', '2-7']
+            }
+        ];
+
+        let currentStageIndex = 0;
+        const slotsContainer = document.getElementById('slots');
+        const poolContainer = document.getElementById('pool');
+        const subtitleEl = document.getElementById('stage-title');
+        let selectedItem = null;
+
+        // --- 計時器邏輯 ---
+        let startTime = null;
+        let timerInterval = null;
+        const timerDisplay = document.getElementById('timer-display');
+
+        function startTimer() {
+            if (!startTime) { // 確保只在第一關剛開始時記錄
+                startTime = Date.now();
+                timerInterval = setInterval(() => {
+                    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                    const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
+                    const secs = String(elapsed % 60).padStart(2, '0');
+                    timerDisplay.innerText = `⏱️ 計時：${mins}:${secs}`;
+                }, 1000);
+            }
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const mins = Math.floor(elapsed / 60);
+            const secs = elapsed % 60;
+            return { mins, secs };
+        }
+
+        // --- Fisher-Yates 完美隨機洗牌演算法 ---
+        function shuffleArray(array) {
+            let newArray = [...array];
+            for (let i = newArray.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+            }
+            return newArray;
+        }
+
+        // --- 初始化遊戲 ---
+        function initGame() {
+            startTime = null; // 重置計時
+            startTimer();
+            loadStage(currentStageIndex);
+        }
+
+        // 載入指定關卡
+        function loadStage(index) {
+            currentStageIndex = index;
+            const stage = stages[index];
+            subtitleEl.innerText = stage.title + " (電腦可直接拖曳，觸控螢幕請點圖片、再點空格)";
+            
+            slotsContainer.innerHTML = '';
+            poolContainer.innerHTML = '';
+            selectedItem = null;
+
+            const files = stage.files;
+
+            // 1. 動態建立空格
+            files.forEach((fileId, i) => {
+                const slot = document.createElement('div');
+                slot.className = 'slot';
+                slot.dataset.expectedId = fileId;
+                slot.style.setProperty('--slot-num', `"${i + 1}"`);
+                setupSlotEvents(slot);
+                slotsContainer.appendChild(slot);
+            });
+
+            // 2. 建立圖片並完美打亂順序
+            let shuffledFiles = shuffleArray(files);
+
+            shuffledFiles.forEach(fileId => {
+                const item = document.createElement('div');
+                item.className = 'item';
+                item.draggable = true;
+                item.dataset.id = fileId;
+
+                const img = document.createElement('img');
+                img.src = `${fileId}.gif`; 
+                img.alt = `步驟圖片`;
+
+                const canvas = document.createElement('canvas');
+
+                item.appendChild(img);
+                item.appendChild(canvas);
+                
+                img.onload = () => {
+                    canvas.width = img.clientWidth || 130;
+                    canvas.height = img.clientHeight || 97;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                };
+
+                setupItemEvents(item);
+                poolContainer.appendChild(item);
+            });
+
+            poolContainer.addEventListener('click', (e) => {
+                if (e.target === poolContainer && selectedItem) {
+                    poolContainer.appendChild(selectedItem);
+                    clearSelection();
+                }
+            });
+        }
+
+        // --- 圖片互動事件 (拖曳 & 點擊) ---
+        function setupItemEvents(item) {
+            item.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', item.dataset.id);
+                selectedItem = item;
+                setTimeout(() => item.style.opacity = '0.5', 0);
+            });
+
+            item.addEventListener('dragend', () => {
+                item.style.opacity = '1';
+                clearSelection();
+            });
+
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (item.classList.contains('correct')) return;
+
+                if (selectedItem === item) {
+                    clearSelection();
+                } else {
+                    clearSelection();
+                    selectedItem = item;
+                    item.classList.add('selected');
+                }
+            });
+
+            item.addEventListener('touchstart', () => item.classList.add('active-play'), {passive: true});
+            item.addEventListener('touchend', () => item.classList.remove('active-play'), {passive: true});
+        }
+
+        // --- 空格互動事件 ---
+        function setupSlotEvents(slot) {
+            slot.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                if (slot.children.length === 0) {
+                    slot.classList.add('drag-over');
+                }
+            });
+
+            slot.addEventListener('dragleave', () => {
+                slot.classList.remove('drag-over');
+            });
+
+            slot.addEventListener('drop', (e) => {
+                e.preventDefault();
+                slot.classList.remove('drag-over');
+                if (selectedItem && slot.children.length === 0) {
+                    slot.appendChild(selectedItem);
+                }
+                clearSelection();
+            });
+
+            slot.addEventListener('click', () => {
+                if (selectedItem && slot.children.length === 0) {
+                    slot.appendChild(selectedItem);
+                    clearSelection();
+                } else if (slot.children.length > 0 && !selectedItem) {
+                    const itemInSlot = slot.children[0];
+                    if (!itemInSlot.classList.contains('correct')) {
+                        selectedItem = itemInSlot;
+                        itemInSlot.classList.add('selected');
+                    }
+                } else if (selectedItem && slot.children.length > 0) {
+                     const oldItem = slot.children[0];
+                     poolContainer.appendChild(oldItem);
+                     slot.appendChild(selectedItem);
+                     clearSelection();
+                }
+            });
+        }
+
+        function clearSelection() {
+            if (selectedItem) {
+                selectedItem.classList.remove('selected');
+                selectedItem = null;
+            }
+        }
+
+        // --- 檢查答案與錯誤提示邏輯 ---
+        function checkAnswers() {
+            const slots = document.querySelectorAll('.slot');
+            let allCorrect = true;
+            let filledCount = 0;
+            let wrongSlotNumbers = [];
+            const totalItems = stages[currentStageIndex].files.length;
+
+            slots.forEach((slot, index) => {
+                const expectedId = slot.dataset.expectedId;
+                const item = slot.children[0];
+                const slotNum = index + 1; // 第幾格 (1-based)
+
+                if (item) {
+                    filledCount++;
+                    if (item.dataset.id === expectedId) {
+                        item.classList.remove('wrong');
+                        item.classList.add('correct');
+                        item.draggable = false;
+                    } else {
+                        allCorrect = false;
+                        wrongSlotNumbers.push(slotNum);
+                        item.classList.add('wrong');
+                        // 放錯的圖片延遲一秒後退回池子
+                        setTimeout(() => {
+                            if(item.parentElement === slot) {
+                                item.classList.remove('wrong');
+                                poolContainer.appendChild(item);
+                            }
+                        }, 1000);
+                    }
+                } else {
+                    allCorrect = false;
+                }
+            });
+
+            // 還沒排滿，且有排錯的，或是完全沒滿，依據需求可以決定要不要提示
+            // 若使用者按檢查，我們就指出目前「有放圖片」且放錯的格子
+            if (wrongSlotNumbers.length > 0) {
+                const errorMsg = document.getElementById('error-msg');
+                errorMsg.innerText = `第 ${wrongSlotNumbers.join('、')} 格的圖片順序有錯喔！`;
+                toggleModal('error-modal', 'flex');
+                return;
+            }
+
+            // 如果全部排滿且完全正確
+            if (allCorrect && filledCount === totalItems) {
+                setTimeout(() => {
+                    showSuccessModal();
+                }, 300);
+            } else if (filledCount < totalItems && wrongSlotNumbers.length === 0) {
+                // 還沒排完，但目前排上去的都對
+                alert("目前排上去的都正確！請繼續將剩下的圖片排完。");
+            }
+        }
+
+        // --- 成功視窗與換關卡邏輯 ---
+        function showSuccessModal() {
+            const modal = document.getElementById('success-modal');
+            const title = document.getElementById('success-title');
+            const msg = document.getElementById('success-msg');
+            const btn = document.getElementById('next-stage-btn');
+            const timeMsg = document.getElementById('success-time-msg');
+
+            timeMsg.style.display = 'none';
+
+            if (currentStageIndex < stages.length - 1) {
+                title.innerText = '🎉 恭喜你！完全答對了！';
+                msg.innerText = '你已經熟悉了「' + stages[currentStageIndex].title.split('：')[1] + '」的流程。準備好進入下一階段了嗎？';
+                btn.innerText = '進入下一階段：' + stages[currentStageIndex + 1].title.split('：')[1];
+            } else {
+                // 這是最後一關，停止計時並顯示總時間
+                const timeData = stopTimer();
+                title.innerText = '🏆 太棒了！茶道大師！';
+                msg.innerText = '你已經完美通關所有的茶席實作解碼！';
+                timeMsg.innerText = `總計花費時間：${timeData.mins} 分 ${timeData.secs} 秒`;
+                timeMsg.style.display = 'block';
+                btn.innerText = '再玩一次 (重置時間並回到第一階段)';
+            }
+            
+            modal.style.display = 'flex';
+        }
+
+        function nextStage() {
+            toggleModal('success-modal', 'none');
+            if (currentStageIndex < stages.length - 1) {
+                loadStage(currentStageIndex + 1);
+            } else {
+                initGame(); // 全部過關，重新初始化遊戲(包含重置計時)
+            }
+        }
+
+        // --- 彈出視窗開關共用函式 ---
+        function toggleModal(modalId, displayState) {
+            document.getElementById(modalId).style.display = displayState;
+            // 如果關閉的是影片視窗，重載iframe以停止影片播放
+            if(modalId === 'video-modal' && displayState === 'none') {
+                const iframe = document.querySelector(`#${modalId} iframe`);
+                const src = iframe.src;
+                iframe.src = src;
+            }
+        }
+
+        // --- 音樂控制 (含突破自動播放限制) ---
+        const bgm = document.getElementById('bgm');
+        const bgmBtn = document.getElementById('bgm-btn');
+        let isPlaying = false;
+
+        // 監聽第一次網頁互動來觸發音樂（解決瀏覽器擋 Autoplay 的問題）
+        document.body.addEventListener('pointerdown', function startAudio() {
+            if (!isPlaying) {
+                bgm.play().then(() => {
+                    isPlaying = true;
+                    bgmBtn.innerText = '⏸️ 暫停背景音樂';
+                }).catch(err => {
+                    console.log("瀏覽器阻擋自動播放：", err);
+                });
+            }
+            // 觸發過一次就移除監聽
+            document.body.removeEventListener('pointerdown', startAudio);
+        }, { once: true });
+
+        bgmBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // 避免觸發上面的 pointerdown
+            if (isPlaying) {
+                bgm.pause();
+                bgmBtn.innerText = '🎵 播放背景音樂';
+            } else {
+                bgm.play();
+                bgmBtn.innerText = '⏸️ 暫停背景音樂';
+            }
+            isPlaying = !isPlaying;
+        });
+
+        // 啟動遊戲
+        window.onload = initGame;
+    </script>
+</body>
+</html>
