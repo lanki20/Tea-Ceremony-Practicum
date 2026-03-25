@@ -341,7 +341,8 @@
         <div class="modal-content">
             <h2>示範影片複習</h2>
             <div class="iframe-container">
-                <iframe src="https://www.youtube.com/embed/66Ry2umJQjo" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                <!-- 加上 ?enablejsapi=1 參數，允許程式控制暫停 -->
+                <iframe src="https://www.youtube.com/embed/66Ry2umJQjo?enablejsapi=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
             </div>
             <button onclick="toggleModal('video-modal', 'none')">關閉影片，繼續挑戰</button>
         </div>
@@ -740,8 +741,8 @@
             document.getElementById(modalId).style.display = displayState;
             if(modalId === 'video-modal' && displayState === 'none') {
                 const iframe = document.querySelector(`#${modalId} iframe`);
-                const src = iframe.src;
-                iframe.src = src; // 重載停止影片
+                // 傳送暫停指令給 YouTube，保留播放進度
+                iframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
             }
         }
 
