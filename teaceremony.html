@@ -6,9 +6,9 @@
     <title>埔小茶席實作解碼</title>
     <style>
         :root {
-            --primary-color: #5d4037; /* 深咖啡/茶色 */
+            --primary-color: #5d4037;
             --secondary-color: #8d6e63;
-            --accent-color: #81c784; /* 綠茶色 */
+            --accent-color: #81c784;
             --bg-color: #efebe9;
             --slot-bg: #d7ccc8;
             --error-color: #e57373;
@@ -36,7 +36,6 @@
             margin-bottom: 5px;
         }
 
-        /* 計時器樣式 */
         .timer-display {
             position: absolute;
             top: 10px;
@@ -44,10 +43,11 @@
             font-size: 1.2em;
             font-weight: bold;
             color: #d32f2f;
-            background: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.9);
             padding: 5px 15px;
             border-radius: 20px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            z-index: 10;
         }
 
         .subtitle {
@@ -92,15 +92,55 @@
             font-weight: bold;
             font-size: 1.1em;
             padding: 12px 30px;
+            margin: 10px 0;
+        }
+
+        /* 階段切換頁籤設計 */
+        .stage-tabs {
+            display: flex;
+            gap: 5px;
+            width: 100%;
+            max-width: 900px;
+            margin-bottom: -2px; /* 讓頁籤與內容區塊接合 */
+            position: relative;
+            z-index: 2;
+        }
+
+        .tab-btn {
+            background-color: #cfd8dc;
+            color: #455a64;
+            border-radius: 10px 10px 0 0;
+            padding: 12px 15px;
+            font-weight: bold;
+            flex: 1;
+            box-shadow: inset 0 -3px 5px rgba(0,0,0,0.05);
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            background-color: white;
+            color: var(--primary-color);
+            box-shadow: 0 -3px 10px rgba(0,0,0,0.05);
+            transform: translateY(2px);
         }
 
         /* 遊戲區域 */
+        .boards-wrapper {
+            background: white;
+            padding: 20px;
+            border-radius: 0 0 15px 15px;
+            width: 100%;
+            max-width: 860px; /* 扣掉padding */
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            z-index: 1;
+            position: relative;
+        }
+
         .game-board {
             display: flex;
             flex-direction: column;
-            gap: 30px;
+            gap: 20px;
             width: 100%;
-            max-width: 900px;
         }
 
         /* 放置區 (上面) */
@@ -108,10 +148,7 @@
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
             gap: 15px;
-            padding: 20px;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            padding: 10px;
         }
 
         .slot {
@@ -147,10 +184,9 @@
             gap: 15px;
             justify-content: center;
             padding: 20px;
-            background: white;
-            border-radius: 15px;
+            background: #f5f5f5;
+            border-radius: 10px;
             min-height: 150px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
         }
 
         /* 圖片項目 */
@@ -164,7 +200,7 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
             transition: transform 0.2s, box-shadow 0.2s, border 0.2s;
             z-index: 1;
-            background-color: #000;
+            background-color: #fff; /* 背景改為白色避免透明GIF發黑 */
         }
 
         .item img, .item canvas {
@@ -191,7 +227,10 @@
 
         .item.correct {
             border: 4px solid var(--accent-color);
-            pointer-events: none; 
+            cursor: pointer; /* 讓學生知道仍然可以互動/播放 */
+        }
+        .item.correct:active {
+            cursor: pointer;
         }
 
         .item.wrong {
@@ -211,8 +250,8 @@
             display: none;
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(0,0,0,0.8);
-            z-index: 1000;
+            background-color: rgba(0,0,0,0.85);
+            z-index: 2000;
             justify-content: center;
             align-items: center;
         }
@@ -220,10 +259,11 @@
         .modal-content {
             background: var(--bg-color);
             padding: 30px;
-            border-radius: 10px;
+            border-radius: 15px;
             width: 90%;
             max-width: 800px;
             text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
 
         .iframe-container {
@@ -249,6 +289,16 @@
                 display: inline-block;
                 margin-bottom: 10px;
             }
+            .stage-tabs {
+                flex-direction: column;
+                margin-bottom: 10px;
+            }
+            .tab-btn {
+                border-radius: 10px;
+            }
+            .boards-wrapper {
+                border-radius: 15px;
+            }
         }
     </style>
 </head>
@@ -258,28 +308,32 @@
         <h1>埔小茶席實作解碼 🍵</h1>
         <div class="timer-display" id="timer-display">⏱️ 計時：00:00</div>
     </div>
-    <div class="subtitle" id="stage-title">第一階段：擺席到溫壺 (電腦可直接拖曳，手機平板請先點圖片、再點空格)</div>
+    <div class="subtitle" id="subtitle-instructions">操作說明：電腦可直接拖曳圖片；觸控螢幕請先點擊下方圖片，再點擊上方空格</div>
 
     <div class="controls">
-        <button id="bgm-btn">🎵 音樂載入中...</button>
         <button class="help-btn" onclick="toggleModal('video-modal', 'flex')">💡 忘記了？看示範影片</button>
     </div>
 
-    <!-- 內建背景音樂 (設定 autoplay，但受瀏覽器政策影響，將透過JS輔助自動播放) -->
-    <audio id="bgm" loop autoplay>
-        <source src="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3" type="audio/mpeg">
-    </audio>
+    <!-- 階段切換頁籤 -->
+    <div class="stage-tabs" id="tabs-container">
+        <!-- JS 動態生成按鈕 -->
+    </div>
 
-    <div class="game-board">
-        <!-- 放置區 -->
-        <div class="slots-container" id="slots"></div>
-        
-        <div style="text-align: center;">
-            <button class="check-btn" onclick="checkAnswers()">✅ 檢查答案</button>
+    <!-- 遊戲圖板容器 -->
+    <div class="boards-wrapper" id="boards-wrapper">
+        <!-- JS 動態生成兩個階段的介面，並保留進度 -->
+    </div>
+
+    <!-- 載入中視窗 (等待所有圖片下載完畢才開始) -->
+    <div class="modal" id="loading-modal" style="display: flex;">
+        <div class="modal-content" style="max-width: 400px;">
+            <h2 style="color: var(--primary-color);">🔄 資源載入中...</h2>
+            <p id="loading-text" style="font-weight: bold;">正在下載茶道素材圖片 (0 / 19)</p>
+            <div style="width: 100%; background: #ddd; border-radius: 10px; overflow: hidden; margin-top: 15px; height: 15px;">
+                <div id="loading-bar" style="width: 0%; height: 100%; background: var(--accent-color); transition: width 0.3s;"></div>
+            </div>
+            <p style="font-size: 0.8em; color: #666; margin-top: 15px;">載入完成後計時才會開始喔！</p>
         </div>
-
-        <!-- 圖片庫 -->
-        <div class="pool-container" id="pool"></div>
     </div>
 
     <!-- YouTube 影片彈出視窗 -->
@@ -298,7 +352,7 @@
         <div class="modal-content" style="max-width: 500px;">
             <h2 style="color: var(--error-color); font-size: 2em; margin-bottom: 10px;">哎呀！有些步驟不對喔！</h2>
             <p id="error-msg" style="font-size: 1.2em; margin-bottom: 25px;">第 X, Y 格的圖片放錯了。</p>
-            <p style="color: #666; margin-bottom: 20px;">錯誤的圖片會退回下方，請重新回想影片內容，或點擊上方「看示範影片」複習！</p>
+            <p style="color: #666; margin-bottom: 20px;">錯誤的圖片會退回下方，正確的圖片會保留。<br>請重新回想影片內容，或點擊上方「看示範影片」複習！</p>
             <button class="check-btn" onclick="toggleModal('error-modal', 'none')" style="background-color: var(--error-color); color: white;">我知道了，重新嘗試</button>
         </div>
     </div>
@@ -309,7 +363,7 @@
             <h2 id="success-title" style="color: var(--accent-color); font-size: 2em; margin-bottom: 10px;">🎉 恭喜你！完全答對了！</h2>
             <p id="success-msg" style="font-size: 1.2em; margin-bottom: 10px;">你已經熟悉了目前的流程。</p>
             <p id="success-time-msg" style="font-size: 1.2em; color: #d32f2f; font-weight: bold; margin-bottom: 25px; display: none;">總計花費時間：00 分 00 秒</p>
-            <button id="next-stage-btn" class="check-btn" onclick="nextStage()">進入下一階段</button>
+            <button id="next-stage-btn" class="check-btn">前往下一階段</button>
         </div>
     </div>
 
@@ -318,33 +372,48 @@
         const stages = [
             {
                 title: "第一階段：擺席到溫壺",
-                files: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
+                files: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
+                cleared: false
             },
             {
                 title: "第二階段：製茶",
-                files: ['2-1', '2-2', '2-3', '2-4', '2-5', '2-6', '2-7']
+                files: ['2-1', '2-2', '2-3', '2-4', '2-5', '2-6', '2-7'],
+                cleared: false
             }
         ];
 
         let currentStageIndex = 0;
-        const slotsContainer = document.getElementById('slots');
-        const poolContainer = document.getElementById('pool');
-        const subtitleEl = document.getElementById('stage-title');
         let selectedItem = null;
 
-        // --- 計時器邏輯 ---
+        // --- 計時器與載入邏輯 ---
         let startTime = null;
         let timerInterval = null;
-        const timerDisplay = document.getElementById('timer-display');
+        let totalImagesToLoad = 0;
+        let imagesLoadedCount = 0;
+
+        function updateLoadingProgress() {
+            imagesLoadedCount++;
+            const percent = Math.floor((imagesLoadedCount / totalImagesToLoad) * 100);
+            document.getElementById('loading-text').innerText = `正在下載茶道素材圖片 (${imagesLoadedCount} / ${totalImagesToLoad})`;
+            document.getElementById('loading-bar').style.width = `${percent}%`;
+
+            if (imagesLoadedCount === totalImagesToLoad) {
+                // 全部圖片載入完畢，延遲一點點關閉視窗並開始計時
+                setTimeout(() => {
+                    toggleModal('loading-modal', 'none');
+                    startTimer();
+                }, 500);
+            }
+        }
 
         function startTimer() {
-            if (!startTime) { // 確保只在第一關剛開始時記錄
+            if (!startTime) { 
                 startTime = Date.now();
                 timerInterval = setInterval(() => {
                     const elapsed = Math.floor((Date.now() - startTime) / 1000);
                     const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
                     const secs = String(elapsed % 60).padStart(2, '0');
-                    timerDisplay.innerText = `⏱️ 計時：${mins}:${secs}`;
+                    document.getElementById('timer-display').innerText = `⏱️ 計時：${mins}:${secs}`;
                 }, 1000);
             }
         }
@@ -357,7 +426,6 @@
             return { mins, secs };
         }
 
-        // --- Fisher-Yates 完美隨機洗牌演算法 ---
         function shuffleArray(array) {
             let newArray = [...array];
             for (let i = newArray.length - 1; i > 0; i--) {
@@ -367,75 +435,130 @@
             return newArray;
         }
 
-        // --- 初始化遊戲 ---
+        // --- 初始化遊戲：一次生成所有階段 DOM 以保留進度 ---
         function initGame() {
-            startTime = null; // 重置計時
-            startTimer();
-            loadStage(currentStageIndex);
+            const tabsContainer = document.getElementById('tabs-container');
+            const boardsWrapper = document.getElementById('boards-wrapper');
+            
+            stages.forEach(s => totalImagesToLoad += s.files.length);
+
+            stages.forEach((stage, index) => {
+                // 生成頁籤
+                const tabBtn = document.createElement('button');
+                tabBtn.className = 'tab-btn';
+                tabBtn.innerText = stage.title;
+                tabBtn.onclick = () => switchStage(index);
+                tabsContainer.appendChild(tabBtn);
+
+                // 生成階段專屬圖板
+                const board = document.createElement('div');
+                board.className = 'game-board';
+                board.id = `board-${index}`;
+                board.style.display = 'none'; // 預設隱藏
+
+                const slotsDiv = document.createElement('div');
+                slotsDiv.className = 'slots-container';
+
+                const checkBtnDiv = document.createElement('div');
+                checkBtnDiv.style.textAlign = 'center';
+                const checkBtn = document.createElement('button');
+                checkBtn.className = 'check-btn';
+                checkBtn.innerText = '✅ 檢查此階段答案';
+                checkBtn.onclick = () => checkAnswers(index);
+                checkBtnDiv.appendChild(checkBtn);
+
+                const poolDiv = document.createElement('div');
+                poolDiv.className = 'pool-container';
+                poolDiv.id = `pool-${index}`;
+
+                // 產生格子
+                stage.files.forEach((fileId, i) => {
+                    const slot = document.createElement('div');
+                    slot.className = 'slot';
+                    slot.dataset.expectedId = fileId;
+                    slot.style.setProperty('--slot-num', `"${i + 1}"`);
+                    setupSlotEvents(slot, index);
+                    slotsDiv.appendChild(slot);
+                });
+
+                // 產生隨機圖片
+                let shuffledFiles = shuffleArray(stage.files);
+                shuffledFiles.forEach(fileId => {
+                    const item = document.createElement('div');
+                    item.className = 'item';
+                    item.draggable = true;
+                    item.dataset.id = fileId;
+
+                    const img = document.createElement('img');
+                    img.src = `${fileId}.gif`; 
+                    const canvas = document.createElement('canvas');
+
+                    item.appendChild(img);
+                    item.appendChild(canvas);
+                    
+                    // 解決黑畫面問題：強制設定畫布尺寸，並在 onload 後給予 150ms 緩衝才繪製第一幀
+                    img.onload = () => {
+                        setTimeout(() => {
+                            canvas.width = 130; // 固定尺寸避免 clientWidth 為 0
+                            canvas.height = 97;
+                            const ctx = canvas.getContext('2d');
+                            ctx.fillStyle = "#fff"; // 填滿白底
+                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                            updateLoadingProgress();
+                        }, 150);
+                    };
+                    img.onerror = updateLoadingProgress; // 即使破圖也要推進進度條以免卡死
+
+                    setupItemEvents(item, index);
+                    poolDiv.appendChild(item);
+                });
+
+                // 點擊池子空白處取消選取
+                poolDiv.addEventListener('click', (e) => {
+                    if (e.target === poolDiv && selectedItem) {
+                        poolDiv.appendChild(selectedItem);
+                        clearSelection();
+                    }
+                });
+
+                board.appendChild(slotsDiv);
+                board.appendChild(checkBtnDiv);
+                board.appendChild(poolDiv);
+                boardsWrapper.appendChild(board);
+            });
+
+            // 初始化顯示第一階段
+            switchStage(0);
         }
 
-        // 載入指定關卡
-        function loadStage(index) {
+        // --- 切換階段 (不流失進度) ---
+        function switchStage(index) {
             currentStageIndex = index;
-            const stage = stages[index];
-            subtitleEl.innerText = stage.title + " (電腦可直接拖曳，觸控螢幕請點圖片、再點空格)";
-            
-            slotsContainer.innerHTML = '';
-            poolContainer.innerHTML = '';
-            selectedItem = null;
+            clearSelection(); // 切換時清空游標手上的物件
 
-            const files = stage.files;
-
-            // 1. 動態建立空格
-            files.forEach((fileId, i) => {
-                const slot = document.createElement('div');
-                slot.className = 'slot';
-                slot.dataset.expectedId = fileId;
-                slot.style.setProperty('--slot-num', `"${i + 1}"`);
-                setupSlotEvents(slot);
-                slotsContainer.appendChild(slot);
+            // 更新頁籤 UI
+            const tabs = document.querySelectorAll('.tab-btn');
+            tabs.forEach((tab, i) => {
+                if (i === index) tab.classList.add('active');
+                else tab.classList.remove('active');
             });
 
-            // 2. 建立圖片並完美打亂順序
-            let shuffledFiles = shuffleArray(files);
-
-            shuffledFiles.forEach(fileId => {
-                const item = document.createElement('div');
-                item.className = 'item';
-                item.draggable = true;
-                item.dataset.id = fileId;
-
-                const img = document.createElement('img');
-                img.src = `${fileId}.gif`; 
-                img.alt = `步驟圖片`;
-
-                const canvas = document.createElement('canvas');
-
-                item.appendChild(img);
-                item.appendChild(canvas);
-                
-                img.onload = () => {
-                    canvas.width = img.clientWidth || 130;
-                    canvas.height = img.clientHeight || 97;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                };
-
-                setupItemEvents(item);
-                poolContainer.appendChild(item);
-            });
-
-            poolContainer.addEventListener('click', (e) => {
-                if (e.target === poolContainer && selectedItem) {
-                    poolContainer.appendChild(selectedItem);
-                    clearSelection();
-                }
+            // 更新畫面內容 UI
+            const boards = document.querySelectorAll('.game-board');
+            boards.forEach((board, i) => {
+                board.style.display = (i === index) ? 'flex' : 'none';
             });
         }
 
         // --- 圖片互動事件 (拖曳 & 點擊) ---
-        function setupItemEvents(item) {
+        function setupItemEvents(item, stageIdx) {
             item.addEventListener('dragstart', (e) => {
+                // 【核心修正】如果已經標記正確，絕對禁止拖曳拉出
+                if (item.classList.contains('correct')) {
+                    e.preventDefault();
+                    return;
+                }
                 e.dataTransfer.setData('text/plain', item.dataset.id);
                 selectedItem = item;
                 setTimeout(() => item.style.opacity = '0.5', 0);
@@ -448,6 +571,7 @@
 
             item.addEventListener('click', (e) => {
                 e.stopPropagation();
+                // 【核心修正】已經標記正確，只能點擊(觸發hover播放)，不能進入「被選取排版」狀態
                 if (item.classList.contains('correct')) return;
 
                 if (selectedItem === item) {
@@ -459,13 +583,18 @@
                 }
             });
 
+            // 觸控螢幕播放支援
             item.addEventListener('touchstart', () => item.classList.add('active-play'), {passive: true});
             item.addEventListener('touchend', () => item.classList.remove('active-play'), {passive: true});
         }
 
-        // --- 空格互動事件 ---
-        function setupSlotEvents(slot) {
+        // --- 空格互動事件 (含防禦機制) ---
+        function setupSlotEvents(slot, stageIdx) {
+            // 判斷格子內是否裝有「正確」的圖片
+            const hasCorrectItem = () => slot.children.length > 0 && slot.children[0].classList.contains('correct');
+
             slot.addEventListener('dragover', (e) => {
+                if (hasCorrectItem()) return; // 裡面有正確解答，禁止拖曳覆蓋
                 e.preventDefault();
                 if (slot.children.length === 0) {
                     slot.classList.add('drag-over');
@@ -479,6 +608,8 @@
             slot.addEventListener('drop', (e) => {
                 e.preventDefault();
                 slot.classList.remove('drag-over');
+                if (hasCorrectItem()) return; // 防呆
+
                 if (selectedItem && slot.children.length === 0) {
                     slot.appendChild(selectedItem);
                 }
@@ -486,17 +617,19 @@
             });
 
             slot.addEventListener('click', () => {
+                if (hasCorrectItem()) return; // 【核心修正】有正確解答的格子，點了也不會有反應、不會被擠掉
+
                 if (selectedItem && slot.children.length === 0) {
                     slot.appendChild(selectedItem);
                     clearSelection();
                 } else if (slot.children.length > 0 && !selectedItem) {
                     const itemInSlot = slot.children[0];
-                    if (!itemInSlot.classList.contains('correct')) {
-                        selectedItem = itemInSlot;
-                        itemInSlot.classList.add('selected');
-                    }
+                    selectedItem = itemInSlot;
+                    itemInSlot.classList.add('selected');
                 } else if (selectedItem && slot.children.length > 0) {
+                     // 交換：把格子裡舊的退回池子，放進新的
                      const oldItem = slot.children[0];
+                     const poolContainer = document.getElementById(`pool-${stageIdx}`);
                      poolContainer.appendChild(oldItem);
                      slot.appendChild(selectedItem);
                      clearSelection();
@@ -511,30 +644,31 @@
             }
         }
 
-        // --- 檢查答案與錯誤提示邏輯 ---
-        function checkAnswers() {
-            const slots = document.querySelectorAll('.slot');
+        // --- 檢查答案與過關邏輯 ---
+        function checkAnswers(stageIdx) {
+            const currentBoard = document.getElementById(`board-${stageIdx}`);
+            const slots = currentBoard.querySelectorAll('.slot');
+            const poolContainer = document.getElementById(`pool-${stageIdx}`);
             let allCorrect = true;
             let filledCount = 0;
             let wrongSlotNumbers = [];
-            const totalItems = stages[currentStageIndex].files.length;
+            const totalItems = stages[stageIdx].files.length;
 
             slots.forEach((slot, index) => {
                 const expectedId = slot.dataset.expectedId;
                 const item = slot.children[0];
-                const slotNum = index + 1; // 第幾格 (1-based)
+                const slotNum = index + 1;
 
                 if (item) {
                     filledCount++;
                     if (item.dataset.id === expectedId) {
                         item.classList.remove('wrong');
                         item.classList.add('correct');
-                        item.draggable = false;
+                        item.draggable = false; // 加上正確標記並拔除原生的拖曳能力
                     } else {
                         allCorrect = false;
                         wrongSlotNumbers.push(slotNum);
                         item.classList.add('wrong');
-                        // 放錯的圖片延遲一秒後退回池子
                         setTimeout(() => {
                             if(item.parentElement === slot) {
                                 item.classList.remove('wrong');
@@ -547,8 +681,6 @@
                 }
             });
 
-            // 還沒排滿，且有排錯的，或是完全沒滿，依據需求可以決定要不要提示
-            // 若使用者按檢查，我們就指出目前「有放圖片」且放錯的格子
             if (wrongSlotNumbers.length > 0) {
                 const errorMsg = document.getElementById('error-msg');
                 errorMsg.innerText = `第 ${wrongSlotNumbers.join('、')} 格的圖片順序有錯喔！`;
@@ -556,96 +688,64 @@
                 return;
             }
 
-            // 如果全部排滿且完全正確
             if (allCorrect && filledCount === totalItems) {
+                stages[stageIdx].cleared = true; // 記錄該階段已通關
                 setTimeout(() => {
-                    showSuccessModal();
+                    handleStageSuccess();
                 }, 300);
             } else if (filledCount < totalItems && wrongSlotNumbers.length === 0) {
-                // 還沒排完，但目前排上去的都對
                 alert("目前排上去的都正確！請繼續將剩下的圖片排完。");
             }
         }
 
-        // --- 成功視窗與換關卡邏輯 ---
-        function showSuccessModal() {
+        function handleStageSuccess() {
             const modal = document.getElementById('success-modal');
             const title = document.getElementById('success-title');
             const msg = document.getElementById('success-msg');
             const btn = document.getElementById('next-stage-btn');
             const timeMsg = document.getElementById('success-time-msg');
-
             timeMsg.style.display = 'none';
 
-            if (currentStageIndex < stages.length - 1) {
-                title.innerText = '🎉 恭喜你！完全答對了！';
-                msg.innerText = '你已經熟悉了「' + stages[currentStageIndex].title.split('：')[1] + '」的流程。準備好進入下一階段了嗎？';
-                btn.innerText = '進入下一階段：' + stages[currentStageIndex + 1].title.split('：')[1];
+            // 檢查是否所有階段都已過關
+            const allCleared = stages.every(s => s.cleared);
+
+            if (!allCleared) {
+                title.innerText = '🎉 恭喜你！該階段完全答對！';
+                msg.innerText = `你已經熟悉了「${stages[currentStageIndex].title.split('：')[1]}」的流程。`;
+                
+                // 找出還沒過關的階段
+                const nextUnclearedIndex = stages.findIndex(s => !s.cleared);
+                btn.innerText = `前往：${stages[nextUnclearedIndex].title.split('：')[1]}`;
+                btn.onclick = () => {
+                    toggleModal('success-modal', 'none');
+                    switchStage(nextUnclearedIndex);
+                };
             } else {
-                // 這是最後一關，停止計時並顯示總時間
+                // 全部過關！停止計時結算
                 const timeData = stopTimer();
                 title.innerText = '🏆 太棒了！茶道大師！';
                 msg.innerText = '你已經完美通關所有的茶席實作解碼！';
                 timeMsg.innerText = `總計花費時間：${timeData.mins} 分 ${timeData.secs} 秒`;
                 timeMsg.style.display = 'block';
-                btn.innerText = '再玩一次 (重置時間並回到第一階段)';
+                btn.innerText = '再玩一次 (重置時間並清空重來)';
+                btn.onclick = () => {
+                    location.reload(); // 最乾淨的重新開始方式
+                };
             }
             
             modal.style.display = 'flex';
         }
 
-        function nextStage() {
-            toggleModal('success-modal', 'none');
-            if (currentStageIndex < stages.length - 1) {
-                loadStage(currentStageIndex + 1);
-            } else {
-                initGame(); // 全部過關，重新初始化遊戲(包含重置計時)
-            }
-        }
-
-        // --- 彈出視窗開關共用函式 ---
         function toggleModal(modalId, displayState) {
             document.getElementById(modalId).style.display = displayState;
-            // 如果關閉的是影片視窗，重載iframe以停止影片播放
             if(modalId === 'video-modal' && displayState === 'none') {
                 const iframe = document.querySelector(`#${modalId} iframe`);
                 const src = iframe.src;
-                iframe.src = src;
+                iframe.src = src; // 重載停止影片
             }
         }
 
-        // --- 音樂控制 (含突破自動播放限制) ---
-        const bgm = document.getElementById('bgm');
-        const bgmBtn = document.getElementById('bgm-btn');
-        let isPlaying = false;
-
-        // 監聽第一次網頁互動來觸發音樂（解決瀏覽器擋 Autoplay 的問題）
-        document.body.addEventListener('pointerdown', function startAudio() {
-            if (!isPlaying) {
-                bgm.play().then(() => {
-                    isPlaying = true;
-                    bgmBtn.innerText = '⏸️ 暫停背景音樂';
-                }).catch(err => {
-                    console.log("瀏覽器阻擋自動播放：", err);
-                });
-            }
-            // 觸發過一次就移除監聽
-            document.body.removeEventListener('pointerdown', startAudio);
-        }, { once: true });
-
-        bgmBtn.addEventListener('click', (e) => {
-            e.stopPropagation(); // 避免觸發上面的 pointerdown
-            if (isPlaying) {
-                bgm.pause();
-                bgmBtn.innerText = '🎵 播放背景音樂';
-            } else {
-                bgm.play();
-                bgmBtn.innerText = '⏸️ 暫停背景音樂';
-            }
-            isPlaying = !isPlaying;
-        });
-
-        // 啟動遊戲
+        // 啟動遊戲建立 DOM，然後等待圖片載入
         window.onload = initGame;
     </script>
 </body>
